@@ -15,12 +15,11 @@ module HerokuDelayedJobAutoscale
       end
 
       def scale_up
-        num_workers = @client.info(@app)[:workers]
-        @client.set_workers(@app, +1) if num_workers < 5
+        @client.set_workers(@app, +1)
       end
 
       def scale_down
-        @client.set_workers(@app, 0)
+        @client.set_workers(@app, -1)
       end
     end
   end

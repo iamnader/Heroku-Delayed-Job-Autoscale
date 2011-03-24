@@ -7,6 +7,7 @@ module HerokuDelayedJobAutoscale
   module Autoscale
 
     @@autoscale_manager = HerokuDelayedJobAutoscale::Manager::Local
+    @@recurring_job_count = RecurringJob.subclasses.count
 
     def self.autoscale_manager
       @@autoscale_manager
@@ -22,7 +23,8 @@ module HerokuDelayedJobAutoscale
 
     def autoscale_enqueue(job)
       begin
-        if autoscale_client.qty.zero?
+        # only autoscale for non recurring jobs and there is a max of 4 workers
+        if !job.ancestors.include?(RecurringJob) && autoscale_client.qty < 5
           autoscale_client.scale_up
         end
       rescue Exception => e
@@ -40,8 +42,12 @@ module HerokuDelayedJobAutoscale
 
     def autoscale_after(job)
       begin
-        # after is triggered before the job is removed, hence we see if this is the last job
-        autoscale_client.scale_down unless job.class.count - 1  > 0
+        # after is triggered before the job is removed
+        # we scale down unless there are no non-recurring jobs left and we make sure
+        # there is always 1 worker left
+        if job.class.count - @@recurring_job_count > 0 && autoscale_client.qty > 1
+          autoscale_client.scale_down
+        end
       rescue Exception => e
         Rails.logger.error "Error autoscaling heroku workers: #{e}"
       end
